@@ -115,3 +115,94 @@ func TestClientMissingRepo(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestClientUpdateFailsWithoutChecksumsAsset(t *testing.T) {
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	mux.HandleFunc("/repos/acme/gamayun/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tag_name":"v1.2.3","assets":[` +
+			`{"name":"gamayun-linux-amd64","browser_download_url":"` + srv.URL + `/gamayun-linux-amd64"}]}`))
+	})
+	downloaded := false
+	mux.HandleFunc("/gamayun-linux-amd64", func(w http.ResponseWriter, r *http.Request) {
+		downloaded = true
+		_, _ = w.Write([]byte("new-binary"))
+	})
+
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "gamayun")
+	if err := os.WriteFile(dest, []byte("old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := &Client{
+		HTTP:    srv.Client(),
+		API:     srv.URL,
+		Repo:    "acme/gamayun",
+		Current: "v1.0.0",
+		Dest:    dest,
+		GOARCH:  "amd64",
+		Restart: func() error { t.Fatal("must not restart"); return nil },
+	}
+	err := c.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "no SHA256SUMS asset") {
+		t.Fatalf("got %v", err)
+	}
+	if downloaded {
+		t.Fatal("must not download binary without SHA256SUMS")
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "old" {
+		t.Fatalf("dest changed: %q", got)
+	}
+}
+
+func TestClientUpdateFailsWithMissingChecksumEntry(t *testing.T) {
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	mux.HandleFunc("/repos/acme/gamayun/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tag_name":"v1.2.3","assets":[` +
+			`{"name":"gamayun-linux-amd64","browser_download_url":"` + srv.URL + `/gamayun-linux-amd64"},` +
+			`{"name":"SHA256SUMS","browser_download_url":"` + srv.URL + `/SHA256SUMS"}]}`))
+	})
+	mux.HandleFunc("/SHA256SUMS", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("deadbeef  gamayun-linux-arm64\n"))
+	})
+	mux.HandleFunc("/gamayun-linux-amd64", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("new-binary"))
+	})
+
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "gamayun")
+	if err := os.WriteFile(dest, []byte("old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := &Client{
+		HTTP:    srv.Client(),
+		API:     srv.URL,
+		Repo:    "acme/gamayun",
+		Current: "v1.0.0",
+		Dest:    dest,
+		GOARCH:  "amd64",
+		Restart: func() error { t.Fatal("must not restart"); return nil },
+	}
+	err := c.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "no checksum for gamayun-linux-amd64") {
+		t.Fatalf("got %v", err)
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "old" {
+		t.Fatalf("dest changed: %q", got)
+	}
+}

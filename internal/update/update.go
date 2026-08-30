@@ -69,16 +69,21 @@ func (c *Client) Run(ctx context.Context) error {
 	if !ok {
 		return fmt.Errorf("release %s has no asset %s", rel.Tag, asset)
 	}
+	if len(rel.Sums) == 0 {
+		return fmt.Errorf("release %s has no SHA256SUMS asset — refusing to install unverified binary", rel.Tag)
+	}
 	fmt.Printf("updating %s → %s\n", c.Current, rel.Tag)
 	tmp, err := c.download(ctx, url)
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmp)
-	if want, ok := rel.Sums[asset]; ok {
-		if err := verifySHA256(tmp, want); err != nil {
-			return err
-		}
+	want, ok := rel.Sums[asset]
+	if !ok {
+		return fmt.Errorf("no checksum for %s in SHA256SUMS — refusing to install unverified binary", asset)
+	}
+	if err := verifySHA256(tmp, want); err != nil {
+		return err
 	}
 	if err := replaceFile(c.Dest, tmp); err != nil {
 		return err
