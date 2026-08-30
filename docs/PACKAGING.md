@@ -16,7 +16,7 @@ If you installed via `install.sh` or copied the binary yourself:
 sudo gamayun --update
 ```
 
-The command looks at the latest release, verifies SHA256, replaces the binary, and runs `systemctl restart`. Where the repository comes from, in this order:
+The command looks at the latest release, verifies SHA256, replaces the binary, and runs `systemctl restart`. Optional `GITHUB_TOKEN` is sent as a Bearer token to GitHub (API and assets) to avoid unauthenticated rate limits. Where the repository comes from, in this order:
 
 1. `--repo owner/name` flag
 2. what was baked into the binary at CI build time (`GITHUB_REPOSITORY`)

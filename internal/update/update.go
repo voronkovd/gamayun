@@ -32,6 +32,7 @@ type Client struct {
 	Current string
 	Dest    string
 	GOARCH  string
+	Token   string
 	Restart func() error
 }
 
@@ -45,6 +46,7 @@ func DefaultClient(repo, dest string) *Client {
 		Current: version.Version,
 		Dest:    dest,
 		GOARCH:  runtime.GOARCH,
+		Token:   os.Getenv("GITHUB_TOKEN"),
 		Restart: restartSystemd,
 	}
 }
@@ -159,6 +161,9 @@ func (c *Client) get(ctx context.Context, url string) (io.ReadCloser, error) {
 	}
 	req.Header.Set("User-Agent", "gamayun/"+c.Current)
 	req.Header.Set("Accept", "application/vnd.github+json")
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
 	resp, err := c.http().Do(req)
 	if err != nil {
 		return nil, err
