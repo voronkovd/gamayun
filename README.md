@@ -53,7 +53,7 @@ sudo ./install.sh
 2. Creates `/etc/gamayun/config.yaml` from [configs/config.example.yaml](configs/config.example.yaml) if it does not exist.
 3. Enables and starts `gamayun.service`.
 
-Then edit the token and chat id:
+Then edit the token and chat id. Create a bot with [@BotFather](https://t.me/BotFather) — Telegram's guide: [How to create a bot](https://core.telegram.org/bots/tutorial).
 
 ```bash
 sudo ${EDITOR:-nano} /etc/gamayun/config.yaml
@@ -86,6 +86,8 @@ journalctl -u gamayun -f
 Live config: **`/etc/gamayun/config.yaml`** (`chmod 600`).  
 Commented example: [`configs/config.example.yaml`](configs/config.example.yaml).  
 FSM state and incidents: `/var/lib/gamayun/state.json` (do not edit by hand).
+
+`bot_token` comes from [@BotFather](https://t.me/BotFather). Telegram's docs: [How to create a bot](https://core.telegram.org/bots/tutorial). After you message the bot, `chat_id` is in `https://api.telegram.org/bot<token>/getUpdates`.
 
 ```yaml
 server_name: my-vps
