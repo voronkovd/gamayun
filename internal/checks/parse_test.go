@@ -84,9 +84,26 @@ func TestParseLoadState(t *testing.T) {
 }
 
 func TestBadDockerStates(t *testing.T) {
-	in := "web running\njob exited\nloop restarting\n"
+	in := "" +
+		"web|running|Up 2 hours\n" +
+		"wl_minio_init_prod|exited|Exited (0) 5 minutes ago\n" +
+		"job|exited|Exited (137) 2 minutes ago\n" +
+		"loop|restarting|Restarting (1) 3 seconds ago\n" +
+		"svc|dead|Dead\n" +
+		"weird|exited|???\n"
 	got := badDockerStates(in)
-	if len(got) != 2 || got[0] != "job(exited)" || got[1] != "loop(restarting)" {
-		t.Fatalf("got %v", got)
+	want := []string{"job(exited)", "loop(restarting)", "svc(dead)", "weird(exited)"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v want %v", got, want)
+		}
+	}
+	for _, s := range got {
+		if strings.Contains(s, "wl_minio_init_prod") {
+			t.Fatalf("exit 0 must not be bad: %v", got)
+		}
 	}
 }
