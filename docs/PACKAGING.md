@@ -1,72 +1,72 @@
-# Обновление и пакеты
+# Updates and packages
 
-Официальный архив Debian/Ubuntu (`apt install` из `archive.ubuntu.com`) — это отдельный долгий процесс: ITP, спонсор-мейнтейнер, Debian Policy, ревью. Для своего флота VPS это не нужно.
+Landing in the official Debian/Ubuntu archive (`apt install` from `archive.ubuntu.com`) is a long process: ITP, a sponsor maintainer, Debian Policy, review. You do not need that for your own VPS fleet.
 
-Рабочая лестница такая:
+The practical ladder:
 
-1. **Сейчас:** бинарник с GitHub Releases и `gamayun --update`.
-2. **Уже заложено:** `.deb` в том же релизе → `apt install ./gamayun_x.y.z_amd64.deb`.
-3. **Потом:** свой apt-репозиторий (тогда обновление = `apt upgrade`).
+1. **Now:** binary from GitHub Releases and `gamayun --update`.
+2. **Already in place:** a `.deb` in the same release → `apt install ./gamayun_x.y.z_amd64.deb`.
+3. **Later:** your own apt repository (then updates are `apt upgrade`).
 
-## Обновление установленного агента
+## Updating an installed agent
 
-Если ставили через `install.sh` или просто скопировали бинарник:
+If you installed via `install.sh` or copied the binary yourself:
 
 ```bash
 sudo gamayun --update
 ```
 
-Команда смотрит latest release, сверяет SHA256, подменяет бинарник и делает `systemctl restart`. Откуда брать репозиторий, в таком порядке:
+The command looks at the latest release, verifies SHA256, replaces the binary, and runs `systemctl restart`. Where the repository comes from, in this order:
 
-1. флаг `--repo owner/name`
-2. то, что зашили в бинарник при сборке CI (`GITHUB_REPOSITORY`)
-3. `update.github_repo` в `/etc/gamayun/config.yaml`
-4. переменная `GAMAYUN_REPO`
+1. `--repo owner/name` flag
+2. what was baked into the binary at CI build time (`GITHUB_REPOSITORY`)
+3. `update.github_repo` in `/etc/gamayun/config.yaml`
+4. `GAMAYUN_REPO` environment variable
 
-Если пакет уже стоит через apt, `--update` откажется и попросит `apt upgrade` — два канала обновления не должны драться.
+If the package is already installed via apt, `--update` refuses and asks for `apt upgrade` — the two update channels must not fight.
 
 ```bash
 gamayun --version
 ```
 
-## .deb без своего репозитория
+## .deb without your own repository
 
-После тега `v*`:
+After a `v*` tag:
 
 ```bash
 wget https://github.com/voronkovd/gamayun/releases/download/v1.0.0/gamayun_1.0.0_amd64.deb
 sudo apt install ./gamayun_1.0.0_amd64.deb
 ```
 
-`postinst` не затирает существующий `/etc/gamayun/config.yaml`.
+`postinst` does not overwrite an existing `/etc/gamayun/config.yaml`.
 
-Собрать пакет локально (нужен `dpkg-deb`, то есть Linux):
+Build the package locally (needs `dpkg-deb`, i.e. Linux):
 
 ```bash
 make deb VERSION=v1.0.0 REPO=owner/name
 ```
 
-## Свой apt-репозиторий (когда понадобится)
+## Your own apt repository (when you need it)
 
-Не «попасть в Ubuntu», а раздать пакет своим машинам через `apt update && apt upgrade`.
+Not "get into Ubuntu" — ship the package to your own machines via `apt update && apt upgrade`.
 
-Минимальный набор:
+Minimum set:
 
-- в релизе уже есть `.deb` для amd64 и arm64;
-- отдельный job или скрипт кладёт их в repo (`reprepro`, `aptly` или [charmbracelet/soft-serve](https://github.com/charmbracelet/soft-serve) не обязателен — достаточно `reprepro`);
-- хостинг: GitHub Pages, Cloudflare R2, обычный nginx на одном VPS;
-- GPG-ключ, которым подписывается `Release`;
-- на машинах один файл:
+- the release already has `.deb` files for amd64 and arm64;
+- a separate job or script puts them into a repo (`reprepro`, `aptly`, or [charmbracelet/soft-serve](https://github.com/charmbracelet/soft-serve) is optional — `reprepro` is enough);
+- hosting: GitHub Pages, Cloudflare R2, or plain nginx on one VPS;
+- a GPG key that signs `Release`;
+- on each machine, one file:
 
 ```
 # /etc/apt/sources.list.d/gamayun.list
 deb [signed-by=/usr/share/keyrings/gamayun.gpg] https://example.com/apt stable main
 ```
 
-После этого обновление — обычный `apt upgrade`. Команду `--update` можно не трогать: она сама уступит apt.
+After that, updates are a normal `apt upgrade`. You can leave `--update` alone: it will yield to apt.
 
-Готовые хостинги, если не хочется крутить reprepro: [Cloudsmith](https://cloudsmith.io), [Gemfury](https://gemfury.com), [Packagecloud](https://packagecloud.io).
+Hosted options if you do not want to run reprepro: [Cloudsmith](https://cloudsmith.io), [Gemfury](https://gemfury.com), [Packagecloud](https://packagecloud.io).
 
-## Официальный Debian/Ubuntu
+## Official Debian/Ubuntu
 
-Имеет смысл только если пакет нужен тысячам чужих машин. Тогда: ITP на bugs.debian.org, пакет по Policy, спонсор из Debian. Это месяцы и не про мониторинг своего флота.
+Worth it only if thousands of other people's machines need the package. Then: an ITP on bugs.debian.org, a Policy-compliant package, a Debian sponsor. That takes months and is not about monitoring your own fleet.

@@ -1,52 +1,52 @@
-# Пример конфига. Установщик копирует его в
-# /etc/gamayun/config.yaml (права 0600), существующий файл не затирает.
+# Sample config. The installer copies this to
+# /etc/gamayun/config.yaml (mode 0600) and does not overwrite an existing file.
 #
-# Секреты можно оставить здесь или задать через окружение:
+# Secrets can stay here or come from the environment:
 #   TG_BOT_TOKEN, TG_CHAT_ID
-# переменные окружения перекрывают значения из файла.
+# Environment variables override values in this file.
 
-# Имя в алертах и ежедневной сводке. Если пусто — hostname машины.
+# Name in alerts and the daily digest. Empty = machine hostname.
 server_name: my-vps
 
 telegram:
   bot_token: "123456:ABC-DEF..."
   chat_id: "123456789"
 
-# Что проверять и как часто.
+# What to check and how often.
 checks:
   interval: 60s
-  # auto — пропускать nginx, если unit не установлен
-  # on   — всегда проверять
-  # off  — никогда не проверять
+  # auto — skip nginx if the unit is not installed
+  # on   — always check
+  # off  — never check
   nginx: auto
   disk_pct_max: 85
   cert_days_min: 14
   mem_avail_min_mb: 150
   load15_max: 2.0
-  # Контейнеры, которые обязаны быть running. Пустой список — не проверять.
+  # Containers that must be running. Empty list — do not check.
   containers: []
   # containers:
   #   - marzban-marzban-1
   #   - amnezia-node-agent
 
-# Когда слать PROBLEM / REMIND / RECOVERED.
+# When to send PROBLEM / REMIND / RECOVERED.
 alerts:
-  fail_streak: 2          # FAIL подряд, прежде чем PROBLEM
-  recover_streak: 1       # OK подряд для RECOVERED
-  escalation:             # паузы после PROBLEM и между напоминаниями
+  fail_streak: 2          # consecutive FAILs before PROBLEM
+  recover_streak: 1       # consecutive OKs for RECOVERED
+  escalation:             # pauses after PROBLEM and between reminders
     - 5m
     - 30m
     - 2h
 
-# Ежедневная сводка (локальное время машины).
+# Daily digest (machine local time).
 digest:
   at: "08:00"
 
-# Куда писать состояние FSM и историю инцидентов.
+# Where to write FSM state and incident history.
 paths:
   state: /var/lib/gamayun/state.json
 
-# Откуда качать обновления (`gamayun --update`).
-# Если бинарник собран в GitHub Actions, owner/name уже зашит — строку можно не писать.
+# Where to fetch updates (`gamayun --update`).
+# If the binary was built in GitHub Actions, owner/name is already baked in — this line is optional.
 # update:
 #   github_repo: voronkovd/gamayun

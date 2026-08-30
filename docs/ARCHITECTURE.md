@@ -1,6 +1,6 @@
-# Архитектура Gamayun
+# Gamayun architecture
 
-Долгоживущий процесс. systemd поднимает его как `Type=simple` с `Restart=always`. Таймер не используется: и проверки, и ежедневная сводка живут внутри демона.
+A long-lived process. systemd starts it as `Type=simple` with `Restart=always`. There is no timer: both checks and the daily digest live inside the daemon.
 
 ```mermaid
 flowchart TB
@@ -16,61 +16,61 @@ flowchart TB
   digest --> tg
 ```
 
-## Пакеты
+## Packages
 
 ```
-cmd/gamayun     точка входа, флаги, сигналы
-internal/config         YAML /etc/gamayun/config.yaml и дефолты
-internal/checks         интерфейс Check, все пробы
+cmd/gamayun             entry point, flags, signals
+internal/config         YAML /etc/gamayun/config.yaml and defaults
+internal/checks         Check interface, all probes
 internal/alert          FSM PROBLEM / REMIND / RECOVERED
-internal/digest         текст сводки, отбор инцидентов
+internal/digest         digest text, incident selection
 internal/notify         Telegram sendMessage
-internal/state          атомарная запись state.json
-internal/service        цикл демона
+internal/state          atomic write of state.json
+internal/service        daemon loop
 ```
 
-Конфиг: YAML `/etc/gamayun/config.yaml` (секции `telegram`, `checks`, `alerts`, `digest`, `paths`). Пример — `configs/config.example.yaml`. `TG_BOT_TOKEN` / `TG_CHAT_ID` в окружении перекрывают файл.
+Config: YAML `/etc/gamayun/config.yaml` (sections `telegram`, `checks`, `alerts`, `digest`, `paths`). Example: `configs/config.example.yaml`. `TG_BOT_TOKEN` / `TG_CHAT_ID` in the environment override the file.
 
-Зависимости: стандартная библиотека + `gopkg.in/yaml.v3`. Сертификаты — `crypto/x509`. Docker — CLI, не SDK. Порты — `/proc/net/tcp{,6}`, не `ss`.
+Dependencies: standard library + `gopkg.in/yaml.v3`. Certificates: `crypto/x509`. Docker: CLI, not an SDK. Ports: `/proc/net/tcp{,6}`, not `ss`.
 
-## Цикл демона
+## Daemon loop
 
-1. Старт: загрузить конфиг и `state.json`. Если слот сводки уже прошёл, а `last_digest` старше слота — отправить сводку (Persistent). Первый запуск без `last_digest`: сводка только если уже наступило сегодняшнее `DIGEST_AT`, иначе ждём.
-2. Сразу прогон проверок, затем по тикеру.
-3. Каждый тик: `Runner` → FSM → сохранить state. Затем проверка «нужна ли сводка».
-4. SIGINT / SIGTERM — выход без частичной записи (save после полного тика).
+1. Start: load config and `state.json`. If the digest slot has already passed and `last_digest` is older than that slot — send the digest (Persistent). First run with no `last_digest`: send only if today's `DIGEST_AT` has already arrived; otherwise wait.
+2. Run checks immediately, then on the ticker.
+3. Each tick: `Runner` → FSM → save state. Then check whether a digest is due.
+4. SIGINT / SIGTERM — exit without a partial write (save after a full tick).
 
-`--once` только печатает результаты и код выхода, без Telegram и без state. `--digest` собирает свежий снапшот, шлёт сводку, обновляет `last_digest`. `--test` шлёт одну строку и выходит. `--version` и `--update` не требуют конфиг: апдейт качает latest GitHub Release, сверяет SHA256 и подменяет бинарник (если пакет из apt — просит `apt upgrade`). Подробности: [PACKAGING.md](PACKAGING.md).
+`--once` only prints results and an exit code, no Telegram and no state. `--digest` takes a fresh snapshot, sends the digest, updates `last_digest`. `--test` sends one line and exits. `--version` and `--update` do not need config: update fetches the latest GitHub Release, verifies SHA256, and replaces the binary (if installed via apt it asks for `apt upgrade`). Details: [PACKAGING.md](PACKAGING.md).
 
-## Интерфейс проверки
+## Check interface
 
 ```go
 type Result struct {
     Key     string            // "disk.root", "nginx.active"
     OK      bool
     Message string
-    Metrics map[string]string // для дайджеста
-    Skip    bool              // нет nginx/docker — не алертить
+    Metrics map[string]string // for the digest
+    Skip    bool              // no nginx/docker — do not alert
 }
 ```
 
-Одна реализация может вернуть несколько `Result` (сертификаты, docker). `Skip` не открывает инцидент и не попадает в «красные» строки сводки.
+One implementation may return several `Result` values (certificates, docker). `Skip` does not open an incident and does not appear in the digest's "red" lines.
 
 ## Alert FSM
 
-Ключ состояния — `Result.Key`. Память процесса плюс `/var/lib/gamayun/state.json` (рестарт не сбрасывает эскалацию и открытые инциденты).
+The state key is `Result.Key`. Process memory plus `/var/lib/gamayun/state.json` (a restart does not reset escalation or open incidents).
 
-Антифлап: FAIL учитывается только после `FAIL_STREAK` подряд (дефолт 2 ≈ 2 минуты при интервале 60 с). Пока стрик не набран, в Telegram тишина.
+Anti-flap: FAIL counts only after `FAIL_STREAK` in a row (default 2 ≈ 2 minutes at a 60s interval). Until the streak is reached, Telegram stays silent.
 
-Подтверждённое падение:
+Confirmed failure:
 
-1. `PROBLEM from {SERVER_NAME}` + текст, открыть инцидент, `next_remind = now + 5m`.
-2. Пока FAIL и `now >= next_remind`: `REMIND #n`, интервалы из `ESCALATION` (5m, 30m, 2h, дальше каждый 2h).
-3. `RECOVER_STREAK` OK подряд (дефолт 1): `RECOVERED`, закрыть инцидент, сбросить level и стрик.
+1. `PROBLEM from {SERVER_NAME}` + text, open an incident, `next_remind = now + 5m`.
+2. While FAIL and `now >= next_remind`: `REMIND #n`, intervals from `ESCALATION` (5m, 30m, 2h, then every 2h).
+3. `RECOVER_STREAK` consecutive OKs (default 1): `RECOVERED`, close the incident, reset level and streak.
 
-Смена текста той же проверки (другой unhealthy-контейнер) не начинает новый PROBLEM: новый текст уйдёт в следующее напоминание. Открытый инцидент обновляет `last_message`.
+A message change on the same check (a different unhealthy container) does not start a new PROBLEM: the new text goes out with the next reminder. An open incident updates `last_message`.
 
-Часы и нотификатор внедряются в FSM — юнит-тесты крутят виртуальное время без сети.
+Clock and notifier are injected into the FSM — unit tests drive virtual time with no network.
 
 ## state.json
 
@@ -101,26 +101,26 @@ type Result struct {
 }
 ```
 
-Запись: temp-файл в том же каталоге + `rename`. Инциденты старше 7 дней (уже закрытые) вычищаются после успешной сводки. Открытые не трогаем.
+Write: a temp file in the same directory + `rename`. Closed incidents older than 7 days are pruned after a successful digest. Open ones are left alone.
 
-## Ежедневная сводка
+## Daily digest
 
-Время — локальная зона машины. Слот: сегодня в `DIGEST_AT`, если `now` ещё раньше — вчерашний слот.
+Time is the machine's local zone. Slot: today at `DIGEST_AT`; if `now` is still earlier — yesterday's slot.
 
-Отправляем, если `last_digest` строго раньше последнего наступившего слота. Пустой `last_digest`: только если уже наступило сегодняшнее `DIGEST_AT` (установка в 10:00 даст сводку сразу; установка в 07:00 — в 08:00).
+Send if `last_digest` is strictly before the last slot that has already occurred. Empty `last_digest`: only if today's `DIGEST_AT` has already arrived (install at 10:00 sends a digest immediately; install at 07:00 waits until 08:00).
 
-Текст:
+Text:
 
 1. `{SERVER_NAME} daily {YYYY-MM-DD}`
-2. Snapshot: диск, RAM, load15, nginx, порты, дни сертификатов, docker (и Skip-строки как `skipped`).
-3. Incidents с момента `last_digest` (если его нет — за 24 ч): start, end или `OPEN`, число напоминаний, последний текст.
-4. Если инцидентов нет: `Incidents: none`.
+2. Snapshot: disk, RAM, load15, nginx, ports, certificate days, docker (Skip rows as `skipped`).
+3. Incidents since `last_digest` (if none — last 24h): start, end or `OPEN`, reminder count, last message.
+4. If there are no incidents: `Incidents: none`.
 
-После успешной отправки: `last_digest = now`, prune.
+After a successful send: `last_digest = now`, prune.
 
 ## systemd
 
-Файл unit: `deploy/gamayun.service`.
+Unit file: `deploy/gamayun.service`.
 
 ```ini
 [Service]
@@ -130,10 +130,10 @@ Restart=always
 RestartSec=5
 ```
 
-Конфиг только из YAML (`--config`). Процесс root: нужны docker, systemctl, `/etc/letsencrypt`.
+Config comes only from YAML (`--config`). The process runs as root: it needs docker, systemctl, `/etc/letsencrypt`.
 
-## Безопасность
+## Security
 
-- `/etc/gamayun/config.yaml` — `0600`, токен не пишется в журнал.
-- Таймаут Telegram 20 с.
-- Нет входящего HTTP. Исходящий только `api.telegram.org`.
+- `/etc/gamayun/config.yaml` — `0600`; the token is never written to the journal.
+- Telegram timeout 20s.
+- No inbound HTTP. Outbound only to `api.telegram.org`.
