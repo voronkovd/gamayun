@@ -206,3 +206,32 @@ func TestClientUpdateFailsWithMissingChecksumEntry(t *testing.T) {
 		t.Fatalf("dest changed: %q", got)
 	}
 }
+
+func TestClientSendsAuthHeader(t *testing.T) {
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	c := &Client{HTTP: srv.Client(), Current: "test"}
+	body, err := c.get(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body.Close()
+	if gotAuth != "" {
+		t.Fatalf("empty token sent Authorization %q", gotAuth)
+	}
+
+	c.Token = "ghs_test"
+	body, err = c.get(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body.Close()
+	if gotAuth != "Bearer ghs_test" {
+		t.Fatalf("got %q", gotAuth)
+	}
+}
