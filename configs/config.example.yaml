@@ -1,0 +1,52 @@
+# Пример конфига. Установщик копирует его в
+# /etc/gamayun/config.yaml (права 0600), существующий файл не затирает.
+#
+# Секреты можно оставить здесь или задать через окружение:
+#   TG_BOT_TOKEN, TG_CHAT_ID
+# переменные окружения перекрывают значения из файла.
+
+# Имя в алертах и ежедневной сводке. Если пусто — hostname машины.
+server_name: my-vps
+
+telegram:
+  bot_token: "123456:ABC-DEF..."
+  chat_id: "123456789"
+
+# Что проверять и как часто.
+checks:
+  interval: 60s
+  # auto — пропускать nginx, если unit не установлен
+  # on   — всегда проверять
+  # off  — никогда не проверять
+  nginx: auto
+  disk_pct_max: 85
+  cert_days_min: 14
+  mem_avail_min_mb: 150
+  load15_max: 2.0
+  # Контейнеры, которые обязаны быть running. Пустой список — не проверять.
+  containers: []
+  # containers:
+  #   - marzban-marzban-1
+  #   - amnezia-node-agent
+
+# Когда слать PROBLEM / REMIND / RECOVERED.
+alerts:
+  fail_streak: 2          # FAIL подряд, прежде чем PROBLEM
+  recover_streak: 1       # OK подряд для RECOVERED
+  escalation:             # паузы после PROBLEM и между напоминаниями
+    - 5m
+    - 30m
+    - 2h
+
+# Ежедневная сводка (локальное время машины).
+digest:
+  at: "08:00"
+
+# Куда писать состояние FSM и историю инцидентов.
+paths:
+  state: /var/lib/gamayun/state.json
+
+# Откуда качать обновления (`gamayun --update`).
+# Если бинарник собран в GitHub Actions, owner/name уже зашит — строку можно не писать.
+# update:
+#   github_repo: voronkovd/gamayun

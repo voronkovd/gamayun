@@ -1,0 +1,15 @@
+[Unit]
+Description=Gamayun — VPS health agent (Telegram alerts + daily digest)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/gamayun --config /etc/gamayun/config.yaml
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

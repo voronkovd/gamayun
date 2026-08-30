@@ -1,0 +1,28 @@
+# build
+/dist/
+/bin/
+/gamayun
+*.exe
+
+# tests
+*.test
+coverage.out
+coverage.html
+
+# local secrets and machine copies of the live config
+*.env
+/config.yaml
+!configs/config.example.yaml
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# go
+vendor/
+
+# graphify working files
+graphify-out/.graphify_*
