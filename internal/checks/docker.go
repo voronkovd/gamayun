@@ -3,6 +3,7 @@ package checks
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/voronkovd/gamayun/internal/config"
@@ -36,7 +37,7 @@ func (d Docker) Run(ctx context.Context) []Result {
 		}
 	}
 
-	all, aerr := d.Exec.run(ctx, path, "ps", "-a", "--format", "{{.Names}} {{.State}}")
+	all, aerr := d.Exec.run(ctx, path, "ps", "-a", "--format", "{{.Names}}|{{.State}}|{{.Status}}")
 	if aerr != nil {
 		out = append(out, fail("docker.state", "docker bad state: "+cliErr(aerr, all), nil))
 	} else {
@@ -78,16 +79,52 @@ func (d Docker) Run(ctx context.Context) []Result {
 func badDockerStates(out string) []string {
 	var bad []string
 	for _, line := range nonEmptyLines(out) {
-		fields := strings.Fields(line)
+		fields := strings.Split(line, "|")
 		if len(fields) < 2 {
 			continue
 		}
-		name, st := fields[0], fields[1]
-		if st == "restarting" || st == "exited" || st == "dead" {
+		name := strings.TrimSpace(fields[0])
+		st := strings.TrimSpace(fields[1])
+		status := ""
+		if len(fields) >= 3 {
+			status = strings.TrimSpace(fields[2])
+		}
+		switch st {
+		case "restarting", "dead":
 			bad = append(bad, name+"("+st+")")
+		case "exited":
+			code, ok := exitedCode(status)
+			if !ok || code != 0 {
+				bad = append(bad, name+"("+st+")")
+			}
 		}
 	}
 	return bad
+}
+
+// exitedCode parses Docker Status like "Exited (137) 2 minutes ago".
+// ok is false when the exit code cannot be extracted.
+func exitedCode(status string) (int, bool) {
+	const prefix = "Exited "
+	i := strings.Index(status, prefix)
+	if i < 0 {
+		return 0, false
+	}
+	rest := status[i+len(prefix):]
+	open := strings.IndexByte(rest, '(')
+	if open < 0 {
+		return 0, false
+	}
+	rest = rest[open+1:]
+	close := strings.IndexByte(rest, ')')
+	if close < 0 {
+		return 0, false
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(rest[:close]))
+	if err != nil {
+		return 0, false
+	}
+	return n, true
 }
 
 func nonEmptyLines(s string) []string {

@@ -88,13 +88,13 @@ How to tell the unit exists: `systemctl show nginx.service -p LoadState`. Value 
 
 | | |
 |---|---|
-| Source | `docker ps -a --format '{{.Names}} {{.State}}'` |
-| FAIL | state is `restarting`, `exited`, or `dead` |
+| Source | `docker ps -a --format '{{.Names}}\|{{.State}}\|{{.Status}}'` |
+| FAIL | state is `restarting` or `dead`; or `exited` with a non-zero exit code |
 | Skip | no `docker` |
 | Metrics | `names` like `foo(exited),bar(dead)` |
 | Text | `docker bad state: foo(exited)` |
 
-A stopped container that is not in `checks.containers` still shows up here.
+A container that exits with code 0 by design (e.g. an init/migration/seed container with `restart: "no"`) is not flagged. A stopped container that is not in `checks.containers` still shows up here if its exit code is non-zero (or the status cannot be parsed).
 
 ## docker.required.\<name\>
 

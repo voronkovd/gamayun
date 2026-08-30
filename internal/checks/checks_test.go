@@ -113,7 +113,7 @@ func TestDockerRequired(t *testing.T) {
 			case args[0] == "ps" && len(args) > 1 && args[1] == "--filter":
 				return "", nil
 			case args[0] == "ps" && len(args) > 1 && args[1] == "-a":
-				return "other exited", nil
+				return "other|exited|Exited (1) 1 minute ago", nil
 			case args[0] == "ps":
 				return "other", nil
 			}
