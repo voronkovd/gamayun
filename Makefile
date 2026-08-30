@@ -19,7 +19,7 @@ deb: build
 	./scripts/build-deb.sh "$(VERSION)" amd64 dist/gamayun-linux-amd64
 	./scripts/build-deb.sh "$(VERSION)" arm64 dist/gamayun-linux-arm64
 
-# darwin 27 + Go 1.22: internal linker omits LC_UUID; external linker is required to run tests.
+# darwin + older Go internal linker may omit LC_UUID; external linker is required to run tests.
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
 TESTFLAGS ?= -ldflags=-linkmode=external

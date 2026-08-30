@@ -40,7 +40,7 @@ sudo gamayun --update   # later versions
 
 ### From source
 
-Go 1.22+.
+Go 1.27.0+.
 
 ```bash
 make build        # linux/amd64 and linux/arm64 → dist/
