@@ -13,6 +13,7 @@ const (
 	KindProblem   = "PROBLEM"
 	KindRemind    = "REMIND"
 	KindRecovered = "RECOVERED"
+	KindResolved  = "RESOLVED"
 )
 
 type Event struct {
@@ -44,6 +45,16 @@ func (f *FSM) Next(snap *state.File, results []checks.Result) (*state.File, []Ev
 	now := f.Now()
 	out := state.Clone(snap)
 	var events []Event
+
+	present := make(map[string]bool, len(results))
+	skipped := make(map[string]bool, len(results))
+	for _, res := range results {
+		present[res.Key] = true
+		if res.Skip {
+			skipped[res.Key] = true
+		}
+	}
+	events = append(events, f.resolveGone(out, present, skipped, now)...)
 
 	for _, res := range results {
 		if res.Skip {
@@ -145,6 +156,8 @@ func (f *FSM) event(kind, key, message string, now time.Time, cs state.CheckStat
 		text = fmt.Sprintf("REMIND #%d from %s — %s (open %s)\n- %s", n, f.ServerName, stamp, formatDur(now.Sub(cs.FirstSeen)), message)
 	case KindRecovered:
 		text = fmt.Sprintf("RECOVERED from %s — %s (lasted %s)\n- %s", f.ServerName, stamp, formatDur(now.Sub(cs.FirstSeen)), message)
+	case KindResolved:
+		text = fmt.Sprintf("RESOLVED from %s — %s (check no longer applies, was open %s)\n- %s", f.ServerName, stamp, formatDur(now.Sub(cs.FirstSeen)), message)
 	}
 	return Event{Kind: kind, Key: key, Message: message, Text: text}
 }
@@ -172,6 +185,29 @@ func openIncident(f *state.File, key string) int {
 		}
 	}
 	return -1
+}
+
+func (f *FSM) resolveGone(out *state.File, present, skipped map[string]bool, now time.Time) []Event {
+	var events []Event
+	for key, cs := range out.Checks {
+		if cs.Status != "firing" {
+			continue
+		}
+		if !skipped[key] && present[key] {
+			continue
+		}
+		ev := f.event(KindResolved, key, cs.LastMessage, now, cs)
+		events = append(events, ev)
+		out.Checks[key] = state.CheckState{Status: "ok"}
+		if i := openIncident(out, key); i >= 0 {
+			t := now
+			out.Incidents[i].Resolved = &t
+			if cs.LastMessage != "" {
+				out.Incidents[i].LastMessage = cs.LastMessage
+			}
+		}
+	}
+	return events
 }
 
 func (f *FSM) touchOpenIncident(snap *state.File, key, message string) {

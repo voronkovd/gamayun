@@ -130,3 +130,67 @@ func TestSkipIgnored(t *testing.T) {
 		t.Fatalf("skip should be ignored: ev=%v checks=%v", ev, snap.Checks)
 	}
 }
+
+func TestFiringResolvesWhenCheckBecomesSkip(t *testing.T) {
+	now := time.Date(2026, 8, 30, 10, 0, 0, 0, time.UTC)
+	f := testFSM(&now)
+	snap := state.Empty()
+	msg := "nginx: NOT active (state: failed)"
+	res := checks.Result{Key: "nginx.active", OK: false, Message: msg}
+
+	snap, ev := f.Next(snap, []checks.Result{res})
+	if len(ev) != 0 {
+		t.Fatalf("first fail must not alert: %v", ev)
+	}
+	now = now.Add(time.Minute)
+	snap, ev = f.Next(snap, []checks.Result{res})
+	if len(ev) != 1 || ev[0].Kind != KindProblem {
+		t.Fatalf("want PROBLEM, got %+v", ev)
+	}
+
+	now = now.Add(time.Minute)
+	snap, ev = f.Next(snap, []checks.Result{{Key: "nginx.active", Skip: true, OK: true, Message: "nginx unit not found"}})
+	if len(ev) != 1 || ev[0].Kind != KindResolved {
+		t.Fatalf("want one KindResolved, got %+v", ev)
+	}
+	if snap.Checks["nginx.active"].Status != "ok" {
+		t.Fatalf("status=%q", snap.Checks["nginx.active"].Status)
+	}
+	i := openIncident(snap, "nginx.active")
+	if i >= 0 {
+		t.Fatal("incident still open")
+	}
+	if len(snap.Incidents) != 1 || snap.Incidents[0].Resolved == nil {
+		t.Fatalf("want closed incident, got %+v", snap.Incidents)
+	}
+}
+
+func TestFiringResolvesWhenCheckDisappears(t *testing.T) {
+	now := time.Date(2026, 8, 30, 10, 0, 0, 0, time.UTC)
+	f := testFSM(&now)
+	snap := state.Empty()
+	msg := "docker: required container 'gone' not running"
+	res := checks.Result{Key: "docker.required.gone", OK: false, Message: msg}
+
+	snap, ev := f.Next(snap, []checks.Result{res})
+	if len(ev) != 0 {
+		t.Fatalf("first fail must not alert: %v", ev)
+	}
+	now = now.Add(time.Minute)
+	snap, ev = f.Next(snap, []checks.Result{res})
+	if len(ev) != 1 || ev[0].Kind != KindProblem {
+		t.Fatalf("want PROBLEM, got %+v", ev)
+	}
+
+	now = now.Add(time.Minute)
+	snap, ev = f.Next(snap, []checks.Result{})
+	if len(ev) != 1 || ev[0].Kind != KindResolved {
+		t.Fatalf("want one KindResolved, got %+v", ev)
+	}
+	if snap.Checks["docker.required.gone"].Status != "ok" {
+		t.Fatalf("status=%q", snap.Checks["docker.required.gone"].Status)
+	}
+	if len(snap.Incidents) != 1 || snap.Incidents[0].Resolved == nil {
+		t.Fatalf("want closed incident, got %+v", snap.Incidents)
+	}
+}
