@@ -60,24 +60,61 @@ func TestPortsFromProc(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.ProcFS = dir
 	cfg.NginxEnabled = "1"
+	showCalls := 0
 	exec := Exec{
 		LookPath: func(string) (string, error) { return "/bin/systemctl", nil },
 		Run: func(ctx context.Context, name string, args ...string) (string, error) {
 			if len(args) >= 1 && args[0] == "show" {
+				showCalls++
 				return "LoadState=loaded", nil
 			}
 			return "active", nil
 		},
 	}
-	got := Ports{Cfg: cfg, Exec: exec}.Run(context.Background())
-	if len(got) != 2 {
-		t.Fatalf("got %d", len(got))
+	got := NginxGroup{Cfg: cfg, Exec: exec}.Run(context.Background())
+	if len(got) != 3 {
+		t.Fatalf("got %d: %+v", len(got), got)
 	}
-	if !got[0].OK || got[0].Key != "nginx.port.80" {
-		t.Fatalf("80: %+v", got[0])
+	if got[0].Key != "nginx.active" || !got[0].OK {
+		t.Fatalf("active: %+v", got[0])
 	}
-	if got[1].OK || got[1].Key != "nginx.port.443" {
-		t.Fatalf("443: %+v", got[1])
+	if !got[1].OK || got[1].Key != "nginx.port.80" {
+		t.Fatalf("80: %+v", got[1])
+	}
+	if got[2].OK || got[2].Key != "nginx.port.443" {
+		t.Fatalf("443: %+v", got[2])
+	}
+	if showCalls != 1 {
+		t.Fatalf("systemctl show called %d times, want 1", showCalls)
+	}
+}
+
+func TestNginxGroupShowOnceWhenSkipped(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.NginxEnabled = "auto"
+	showCalls := 0
+	exec := Exec{
+		LookPath: func(string) (string, error) { return "/bin/systemctl", nil },
+		Run: func(ctx context.Context, name string, args ...string) (string, error) {
+			if len(args) >= 1 && args[0] == "show" {
+				showCalls++
+				return "LoadState=not-found", nil
+			}
+			t.Fatalf("unexpected run: %s %v", name, args)
+			return "", nil
+		},
+	}
+	got := NginxGroup{Cfg: cfg, Exec: exec}.Run(context.Background())
+	if len(got) != 3 {
+		t.Fatalf("got %d: %+v", len(got), got)
+	}
+	for _, r := range got {
+		if !r.Skip {
+			t.Fatalf("want skip: %+v", r)
+		}
+	}
+	if showCalls != 1 {
+		t.Fatalf("systemctl show called %d times, want 1", showCalls)
 	}
 }
 

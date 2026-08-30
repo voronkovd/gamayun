@@ -35,8 +35,7 @@ func Default(cfg config.Config, exec Exec) *Runner {
 		exec = DefaultExec()
 	}
 	return &Runner{Checks: []Check{
-		Nginx{Cfg: cfg, Exec: exec},
-		Ports{Cfg: cfg, Exec: exec},
+		NginxGroup{Cfg: cfg, Exec: exec},
 		Certs{Cfg: cfg},
 		Disk{Cfg: cfg},
 		Memory{Cfg: cfg},

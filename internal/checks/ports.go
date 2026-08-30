@@ -2,7 +2,6 @@ package checks
 
 import (
 	"bufio"
-	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,13 +13,7 @@ import (
 
 const tcpListen = 0x0A
 
-type Ports struct {
-	Cfg  config.Config
-	Exec Exec
-}
-
-func (p Ports) Run(ctx context.Context) []Result {
-	decision := nginxDecision(ctx, p.Cfg, p.Exec)
+func nginxPortResults(cfg config.Config, decision nginxMode) []Result {
 	if decision.Skip {
 		return []Result{
 			skipped("nginx.port.80", decision.Reason),
@@ -28,7 +21,7 @@ func (p Ports) Run(ctx context.Context) []Result {
 		}
 	}
 
-	proc := p.Cfg.ProcFS
+	proc := cfg.ProcFS
 	if proc == "" {
 		proc = "/proc"
 	}

@@ -7,20 +7,27 @@ import (
 	"github.com/voronkovd/gamayun/internal/config"
 )
 
-type Nginx struct {
+// NginxGroup runs nginx.active and nginx.port.{80,443} with a single
+// nginxDecision (one systemctl show) per Run.
+type NginxGroup struct {
 	Cfg  config.Config
 	Exec Exec
 }
 
-func (n Nginx) Run(ctx context.Context) []Result {
-	decision := nginxDecision(ctx, n.Cfg, n.Exec)
+func (g NginxGroup) Run(ctx context.Context) []Result {
+	decision := nginxDecision(ctx, g.Cfg, g.Exec)
+	out := nginxActiveResults(ctx, g.Cfg, g.Exec, decision)
+	return append(out, nginxPortResults(g.Cfg, decision)...)
+}
+
+func nginxActiveResults(ctx context.Context, cfg config.Config, exec Exec, decision nginxMode) []Result {
 	if decision.Skip {
 		return []Result{skipped("nginx.active", decision.Reason)}
 	}
-	if decision.Err != "" && n.Cfg.NginxForced() {
+	if decision.Err != "" && cfg.NginxForced() {
 		return []Result{fail("nginx.active", "nginx: "+decision.Err, map[string]string{"state": "error"})}
 	}
-	out, _ := n.Exec.run(ctx, "systemctl", "is-active", "nginx")
+	out, _ := exec.run(ctx, "systemctl", "is-active", "nginx")
 	state := strings.TrimSpace(out)
 	if state == "" {
 		state = "unknown"
